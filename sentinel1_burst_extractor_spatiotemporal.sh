@@ -113,8 +113,11 @@ fi
 if [ -z $lat ]; then 
 	echo "Latitude (y) not defined" && exit 3
 fi
+if [ -o $out_path ]; then
+	echo "Output dir not defined" && exit 3
+fi
 
 set -x
-wget -qO - 'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts?$filter=((SwathIdentifier%20eq%20%27'$sub_swath'%27)%20and%20(PolarisationChannels%20eq%20%27'$(echo $polarization | tr a-z A-Z)'%27)%20and%20(ContentDate/Start%20ge%20'$start_date'T00:00:00.000Z%20and%20ContentDate/Start%20le%20'$end_date'T23:59:59.999Z)%20and%20(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POINT%20('$lon'%20'$lat')%27)))&$top=1000' | jq -r '.value[] | "sentinel1_burst_extractor.sh -p '$polarization' -o '$HOME' -n " + .ParentProductName + " -s " + (.SwathIdentifier|ascii_downcase) + " -r " + (.BurstId|tostring)' | xargs -i bash -c "{}"
+wget -qO - 'https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts?$filter=((SwathIdentifier%20eq%20%27'$sub_swath'%27)%20and%20(PolarisationChannels%20eq%20%27'$(echo $polarization | tr a-z A-Z)'%27)%20and%20(ContentDate/Start%20ge%20'$start_date'T00:00:00.000Z%20and%20ContentDate/Start%20le%20'$end_date'T23:59:59.999Z)%20and%20(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POINT%20('$lon'%20'$lat')%27)))&$top=1000' | jq -r '.value[] | "sentinel1_burst_extractor.sh -p '$polarization' -o '$out_path' -n " + .ParentProductName + " -s " + (.SwathIdentifier|ascii_downcase) + " -r " + (.BurstId|tostring)' | xargs -i bash -c "{}"
 set +x
 exit 0

@@ -223,3 +223,4 @@ printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | s
 -d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > ${out_path}/manifest.safe
 
 gdal_translate -of GTiff --config AWS_S3_ENDPOINT ${s3_endpoint} --config GDAL_HTTP_MAX_RETRY 5 --config AWS_HTTPS YES --config AWS_VIRTUAL_HOSTING FALSE --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
+echo "out_path: $out_path/manifest.safe"
