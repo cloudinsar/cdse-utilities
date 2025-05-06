@@ -174,6 +174,12 @@ starting_line=$(echo "(${burst_number}-1)*${number_of_lines}" | bc)
 ending_line=$((${starting_line}+${number_of_lines}))
 platform_number=$(printf "$manifest_data" | xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:platform/safe:number' -v '.')
 [ -z $out_path ] && out_path="./S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo ${subswath_id}| tr a-z A-Z)_$(echo ${polarization}| tr a-z A-Z)_${datatake_id}.SAFE || out_path=${out_path}"/S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo ${subswath_id}| tr a-z A-Z)_$(echo ${polarization}| tr a-z A-Z)_${datatake_id}.SAFE
+if [ -d "$out_path" ]; then
+  echo "Output path $out_path already exists. Returning early."
+  echo "out_path: $out_path/manifest.safe"
+  exit 0
+fi
+
 new_pattern=${annotation_xml: -68:15}${relative_burst_id}-${burst_sensing_start}-${datatake_id}
 new_pattern_short=$(echo $new_pattern | tr -d '-')
 mkdir -p ${out_path}/measurement/ ${out_path}/annotation/calibration/
@@ -221,3 +227,4 @@ printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | s
 -d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > ${out_path}/manifest.safe
 
 gdal_translate -of GTiff --config AWS_S3_ENDPOINT ${s3_endpoint} --config GDAL_HTTP_MAX_RETRY 5 --config AWS_HTTPS YES --config AWS_VIRTUAL_HOSTING FALSE --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
+echo "out_path: $out_path/manifest.safe"
