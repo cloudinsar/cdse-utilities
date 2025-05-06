@@ -174,6 +174,12 @@ starting_line=$(echo "(${burst_number}-1)*${number_of_lines}" | bc)
 ending_line=$((${starting_line}+${number_of_lines}))
 platform_number=$(printf "$manifest_data" | xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:platform/safe:number' -v '.')
 [ -z $out_path ] && out_path="./S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo ${subswath_id}| tr a-z A-Z)_$(echo ${polarization}| tr a-z A-Z)_${datatake_id}.SAFE || out_path=${out_path}"/S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo ${subswath_id}| tr a-z A-Z)_$(echo ${polarization}| tr a-z A-Z)_${datatake_id}.SAFE
+if [ -d "$out_path" ]; then
+  echo "Output path $out_path already exists. Returning early."
+  echo "out_path: $out_path/manifest.safe"
+  exit 0
+fi
+
 new_pattern=${annotation_xml: -68:15}${relative_burst_id}-${burst_sensing_start}-${datatake_id}
 new_pattern_short=$(echo $new_pattern | tr -d '-')
 mkdir -p ${out_path}/measurement/ ${out_path}/annotation/calibration/
