@@ -51,7 +51,7 @@ if [ -z $S3_ENDPOINT_URL ]; then
   export S3_ENDPOINT_URL='https://eodata.dataspace.copernicus.eu'
 fi
 
-while getopts “he:n:o:p:r:s:v” OPTION; do
+while getopts "he:n:o:p:r:s:v" OPTION; do
 	case $OPTION in
 		e)  
 			S3_ENDPOINT_URL=$OPTARG
