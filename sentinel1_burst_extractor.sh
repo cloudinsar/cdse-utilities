@@ -31,12 +31,12 @@ The credentials have to be exported as environmental variables by typing:
 
 export AWS_ACCESS_KEY_ID='replace-this-with-your-cdse-s3-access-key-id'
 export AWS_SECRET_ACCESS_KEY='replace-this-with-your-cdse-s3-secret-access-key'
-export S3_ENDPOINT_URL='eodata.dataspace.copernicus.eu'
+export S3_ENDPOINT_URL='https://eodata.dataspace.copernicus.eu'
 
 Warning! GDAL version has to be >= 3.9
 
 OPTIONS:
-   -e      S3 endpoint. Default is eodata.dataspace.copernicus.eu 
+   -e      S3 endpoint. Default is https://eodata.dataspace.copernicus.eu
    -h      this message
    -n	   name of the Sentinel-1 SLC product e.g. S1A_IW_SLC__1SDH_20240201T085352_20240201T085422_052363_0654EE_5132.SAFE 
    -o      output directory. If not specified the output file will be created in $PWD 
