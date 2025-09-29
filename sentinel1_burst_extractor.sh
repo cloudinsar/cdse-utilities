@@ -30,7 +30,8 @@ To obtain the Copernicus Data Space Ecosystem S3 credentials please visit https:
 The credentials have to be exported as environmental variables by typing:
 
 export AWS_ACCESS_KEY_ID='replace-this-with-your-cdse-s3-access-key-id'
-export AWS_SECRET_ACCESS_KEY='replace-this-with-your-cdse-s3-secret-access-key'  
+export AWS_SECRET_ACCESS_KEY='replace-this-with-your-cdse-s3-secret-access-key'
+export S3_ENDPOINT_URL='eodata.dataspace.copernicus.eu'
 
 Warning! GDAL version has to be >= 3.9
 
@@ -45,11 +46,15 @@ OPTIONS:
    -v      sentinel1_burst_extractor version
 EOF
 }
-s3_endpoint='eodata.dataspace.copernicus.eu'
+if [ -z $S3_ENDPOINT_URL ]; then
+	echo 'Environmental variables S3_ENDPOINT_URL not defined. Using default'
+  export S3_ENDPOINT_URL='https://eodata.dataspace.copernicus.eu'
+fi
+
 while getopts “he:n:o:p:r:s:v” OPTION; do
 	case $OPTION in
 		e)  
-			s3_endpoint=$OPTARG  
+			S3_ENDPOINT_URL=$OPTARG
 			;;
 		h)
 			usage
@@ -132,12 +137,12 @@ case $subswath_id in
 	*)
 		echo "subswath '$subswath_id' not equals one of iw1,iw2,iw3,ew1,ew2,ew3,ew4,ew5" && exit 3 ;;
 esac
-annotation_xml=$(s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
+annotation_xml=$(s5cmd -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
 if [ $(printf "$annotation_xml" | grep -c 'EC2MetadataError') -eq 1 ]; then
-	echo "ERROR:Failed to connect with $s3_endpoint" && exit 7
+	echo "ERROR:Failed to connect with ${S3_ENDPOINT_URL}" && exit 7
 fi
-annotation_data=$(s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 cat $annotation_xml)
-manifest_data=$(s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 cat s3:/${in_path}/manifest.safe)
+annotation_data=$(s5cmd -r 5 cat $annotation_xml)
+manifest_data=$(s5cmd -r 5 cat s3:/${in_path}/manifest.safe)
 datatake_id=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId | awk '{printf("%06d",$1)}')
 number_of_lines=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst)
 number_of_samples=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst)
@@ -194,18 +199,18 @@ annotation_data=$(printf "$annotation_data" | xmlstarlet ed \
 -u "product/imageAnnotation/imageInformation/productLastLineUtcTime" -v $burst_azimuth_end \
 -u "product/adsHeader/stopTime" -v $burst_azimuth_end)
 printf "$annotation_data">${out_path}/annotation/${new_pattern}.xml
-s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
+s5cmd -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
 -u 'calibration/adsHeader/startTime' -v $burst_azimuth_start \
 -u 'calibration/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/calibration/calibration-${new_pattern}.xml
 
-s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/noise-/g') | xmlstarlet ed \
+s5cmd -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/noise-/g') | xmlstarlet ed \
 -u 'noise/noiseRangeVectorList/noiseRangeVector/line' -x ".-$starting_line" \
 -u 'noise/adsHeader/startTime' -v $burst_azimuth_start \
 -u 'noise/adsHeader/stopTime' -v $burst_azimuth_end>${out_path}/annotation/calibration/noise-${new_pattern}.xml
-if [ "$(s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 ls s3:/${in_path}/annotation/ | grep -c rfi)" -eq "1" ]; then
+if [ "$(s5cmd -r 5 ls s3:/${in_path}/annotation/ | grep -c rfi)" -eq "1" ]; then
 	mkdir -p ${out_path}/annotation/rfi/
-	s5cmd --endpoint-url "https://${s3_endpoint}" -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') | xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
+	s5cmd -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') | xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
 fi
 
 footprint=$(printf "$annotation_data" | xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
@@ -226,5 +231,5 @@ printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | s
 -d 'xfdu:XFDU/informationPackageMap/xfdu:contentUnit/xfdu:contentUnit/dataObjectPointer[not(contains(@dataObjectID,"'$new_pattern_short'"))]/..' \
 -d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > ${out_path}/manifest.safe
 
-gdal_translate -of GTiff --config AWS_S3_ENDPOINT ${s3_endpoint} --config GDAL_HTTP_MAX_RETRY 5 --config AWS_HTTPS YES --config AWS_VIRTUAL_HOSTING FALSE --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
+gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config AWS_HTTPS YES --config AWS_VIRTUAL_HOSTING FALSE --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
 echo "out_path: $out_path/manifest.safe"
