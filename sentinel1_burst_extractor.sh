@@ -47,10 +47,6 @@ OPTIONS:
    -v      sentinel1_burst_extractor version
 EOF
 }
-if [ -z $S3_ENDPOINT_URL ]; then
-	echo 'Environmental variables S3_ENDPOINT_URL not defined. Using default'
-  export S3_ENDPOINT_URL='https://eodata.dataspace.copernicus.eu'
-fi
 
 while getopts "he:n:o:p:r:s:v" OPTION; do
 	case $OPTION in
@@ -86,6 +82,27 @@ while getopts "he:n:o:p:r:s:v" OPTION; do
 			;;
 	esac
 done
+if [ -z "$AWS_ENDPOINT_URL_S3" ]; then
+  export AWS_ENDPOINT_URL_S3='https://eodata.dataspace.copernicus.eu'
+	echo "Environmental variables AWS_ENDPOINT_URL_S3 not defined. Using default: $AWS_ENDPOINT_URL_S3"
+fi
+# for f5cmd:
+export S3_ENDPOINT_URL=$AWS_ENDPOINT_URL_S3
+# for gdal translate needs to be without https:// nor http://
+AWS_S3_ENDPOINT=$(echo "$S3_ENDPOINT_URL" | sed 's/https\?:\/\///g')
+export AWS_S3_ENDPOINT
+if [ -z "$AWS_VIRTUAL_HOSTING" ]; then
+  export AWS_VIRTUAL_HOSTING='FALSE'
+	echo "Environmental variables AWS_VIRTUAL_HOSTING not defined. Using default: $AWS_VIRTUAL_HOSTING"
+fi
+if [ -z "$AWS_HTTPS" ]; then
+	if [[ $S3_ENDPOINT_URL == https* ]]; then
+    export AWS_HTTPS='TRUE'
+  else
+    export AWS_HTTPS='FALSE'
+  fi
+	echo "Environmental variables AWS_HTTPS not defined. Using default: $AWS_HTTPS"
+fi
 if [ -z $AWS_ACCESS_KEY_ID -o -z $AWS_SECRET_ACCESS_KEY ]; then
 	echo 'Environmental variables AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY not defined. For more info visit: https://eodata-s3keysmanager.dataspace.copernicus.eu/' && exit 6
 fi
@@ -234,5 +251,5 @@ printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | s
 -d 'xfdu:XFDU/informationPackageMap/xfdu:contentUnit/xfdu:contentUnit/dataObjectPointer[not(contains(@dataObjectID,"'$new_pattern_short'"))]/..' \
 -d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > ${out_path}/manifest.safe
 
-gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config AWS_HTTPS YES --config AWS_VIRTUAL_HOSTING FALSE --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
+gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
 echo "out_path: $out_path/manifest.safe"
