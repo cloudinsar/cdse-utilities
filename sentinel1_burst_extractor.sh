@@ -146,9 +146,10 @@ annotation_data=$(s5cmd -r 5 cat $annotation_xml)
 manifest_data=$(s5cmd -r 5 cat s3:/${in_path}/manifest.safe)
 datatake_id=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId | awk '{printf("%06d",$1)}')
 number_of_lines=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst)
-set +eo pipefail
 number_of_samples=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst)
+set +eo pipefail
 burst_number=$(printf "$annotation_data" | xmlstarlet sel -t -m "//burst/burstId" -v . -n | grep -B 1000 ${relative_burst_id} | wc -l)
+set -eo pipefail
 if [ $burst_number -eq 0 ]; then
 	T0_b1=$(printf "$annotation_data" | xmlstarlet sel -t -m "/product/swathTiming/burstList/burst" -n -v sensingTime | grep . | xargs -i date -d {} "+%s.%N") 
 	Tanx=$(printf "$manifest_data" | xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:orbitReference/safe:extension/s1:orbitProperties' -v 's1:ascendingNodeTime' | xargs -i date -d {} "+%s.%N")
