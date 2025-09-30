@@ -16,6 +16,7 @@
 #sudo apt update
 #sudo apt install -y xmlstarlet bc jq
 version="1.3"
+set -eo pipefail
 usage()
 {
 cat << EOF
@@ -111,7 +112,7 @@ in_path=$(curl --retry 5 --retry-all-errors -sS -L 'https://catalogue.dataspace.
 if [ -z $in_path ]; then 
 	echo "Sentinel-1 SLC product '$product_name' not found in the Copernicus Data Space Ecosystem repository" && exit 4
 fi
-if [ -z $relative_burst_id ]; then 
+if [ -z $relative_burst_id ]; then
 	echo "Sentinel-1 relative burst ID not defined" && exit 3
 fi
 if [ ! "$polarization" = "vv" -a ! "$polarization" = "vh" -a ! "$polarization" = "hh" -a ! "$polarization" = "hv" ]; then 
@@ -145,6 +146,7 @@ annotation_data=$(s5cmd -r 5 cat $annotation_xml)
 manifest_data=$(s5cmd -r 5 cat s3:/${in_path}/manifest.safe)
 datatake_id=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId | awk '{printf("%06d",$1)}')
 number_of_lines=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst)
+set +eo pipefail
 number_of_samples=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst)
 burst_number=$(printf "$annotation_data" | xmlstarlet sel -t -m "//burst/burstId" -v . -n | grep -B 1000 ${relative_burst_id} | wc -l)
 if [ $burst_number -eq 0 ]; then
