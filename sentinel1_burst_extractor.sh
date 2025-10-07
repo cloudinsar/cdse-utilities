@@ -16,7 +16,7 @@
 #sudo apt update
 #sudo apt install -y xmlstarlet bc jq
 version="1.3"
-set -eo pipefail
+set -euo pipefail
 usage()
 {
 cat << EOF
@@ -166,7 +166,7 @@ number_of_lines=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swa
 number_of_samples=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst)
 set +eo pipefail
 burst_number=$(printf "$annotation_data" | xmlstarlet sel -t -m "//burst/burstId" -v . -n | grep -B 1000 ${relative_burst_id} | wc -l)
-set -eo pipefail
+set -euo pipefail
 if [ $burst_number -eq 0 ]; then
 	T0_b1=$(printf "$annotation_data" | xmlstarlet sel -t -m "/product/swathTiming/burstList/burst" -n -v sensingTime | grep . | xargs -i date -d {} "+%s.%N") 
 	Tanx=$(printf "$manifest_data" | xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:orbitReference/safe:extension/s1:orbitProperties' -v 's1:ascendingNodeTime' | xargs -i date -d {} "+%s.%N")
