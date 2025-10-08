@@ -91,11 +91,11 @@ export S3_ENDPOINT_URL=$AWS_ENDPOINT_URL_S3
 # for gdal translate needs to be without https:// nor http://
 AWS_S3_ENDPOINT=$(echo "$S3_ENDPOINT_URL" | sed 's/https\?:\/\///g')
 export AWS_S3_ENDPOINT
-if [ -z "$AWS_VIRTUAL_HOSTING" ]; then
+if [ -n "${AWS_VIRTUAL_HOSTING:-}" ]; then
   export AWS_VIRTUAL_HOSTING='FALSE'
 	echo "Environmental variables AWS_VIRTUAL_HOSTING not defined. Using default: $AWS_VIRTUAL_HOSTING"
 fi
-if [ -z "$AWS_HTTPS" ]; then
+if [ -n "${AWS_HTTPS:-}" ]; then
 	if [[ $S3_ENDPOINT_URL == https* ]]; then
     export AWS_HTTPS='TRUE'
   else
@@ -103,7 +103,7 @@ if [ -z "$AWS_HTTPS" ]; then
   fi
 	echo "Environmental variables AWS_HTTPS not defined. Using default: $AWS_HTTPS"
 fi
-if [ -z $AWS_ACCESS_KEY_ID -o -z $AWS_SECRET_ACCESS_KEY ]; then
+if [ -n "${AWS_ACCESS_KEY_ID:-}" ] || [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
 	echo 'Environmental variables AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY not defined. For more info visit: https://eodata-s3keysmanager.dataspace.copernicus.eu/' && exit 6
 fi
 gdal_version=$(gdalinfo --version | cut -c 6-11 | cut -f1 -d ',')
