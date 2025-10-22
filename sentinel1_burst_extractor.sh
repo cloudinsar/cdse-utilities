@@ -157,12 +157,12 @@ case $subswath_id in
 	*)
 		echo "subswath '$subswath_id' not equals one of iw1,iw2,iw3,ew1,ew2,ew3,ew4,ew5" && exit 3 ;;
 esac
-annotation_xml=$(s5cmd -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
+annotation_xml=$(s5cmd --log debug --log debug -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
 if [ $(printf "$annotation_xml" | grep -c 'EC2MetadataError') -eq 1 ]; then
 	echo "ERROR:Failed to connect with ${S3_ENDPOINT_URL}" && exit 7
 fi
-annotation_data=$(s5cmd -r 5 cat $annotation_xml)
-manifest_data=$(s5cmd -r 5 cat s3:/${in_path}/manifest.safe)
+annotation_data=$(s5cmd --log debug -r 5 cat $annotation_xml)
+manifest_data=$(s5cmd --log debug -r 5 cat s3:/${in_path}/manifest.safe)
 datatake_id=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId | awk '{printf("%06d",$1)}')
 number_of_lines=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst)
 number_of_samples=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst)
@@ -221,18 +221,18 @@ annotation_data=$(printf "$annotation_data" | xmlstarlet ed \
 -u "product/imageAnnotation/imageInformation/productLastLineUtcTime" -v $burst_azimuth_end \
 -u "product/adsHeader/stopTime" -v $burst_azimuth_end)
 printf "$annotation_data">${out_path}/annotation/${new_pattern}.xml
-s5cmd -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
+s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
 -u 'calibration/adsHeader/startTime' -v $burst_azimuth_start \
 -u 'calibration/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/calibration/calibration-${new_pattern}.xml
 
-s5cmd -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/noise-/g') | xmlstarlet ed \
+s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/noise-/g') | xmlstarlet ed \
 -u 'noise/noiseRangeVectorList/noiseRangeVector/line' -x ".-$starting_line" \
 -u 'noise/adsHeader/startTime' -v $burst_azimuth_start \
 -u 'noise/adsHeader/stopTime' -v $burst_azimuth_end>${out_path}/annotation/calibration/noise-${new_pattern}.xml
-if [ "$(s5cmd -r 5 ls s3:/${in_path}/annotation/ | grep -c rfi)" -eq "1" ]; then
+if [ "$(s5cmd --log debug -r 5 ls s3:/${in_path}/annotation/ | grep -c rfi)" -eq "1" ]; then
 	mkdir -p ${out_path}/annotation/rfi/
-	s5cmd -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') | xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
+	s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') | xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
 fi
 
 footprint=$(printf "$annotation_data" | xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
