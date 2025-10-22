@@ -253,5 +253,8 @@ printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | s
 -d 'xfdu:XFDU/informationPackageMap/xfdu:contentUnit/xfdu:contentUnit/dataObjectPointer[not(contains(@dataObjectID,"'$new_pattern_short'"))]/..' \
 -d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > ${out_path}/manifest.safe
 
+set -x
+echo "gdal_translate"
 gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
+set +x
 echo "out_path: $out_path/manifest.safe"
