@@ -107,7 +107,7 @@ if [ -z "${AWS_ACCESS_KEY_ID-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY-}" ]; then
 	echo 'Environmental variables AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY not defined. For more info visit: https://eodata-s3keysmanager.dataspace.copernicus.eu/' && exit 6
 fi
 # dump all environment variables
-printenv
+(set -o posix; set)
 gdal_version=$(gdalinfo --version | cut -c 6-11 | cut -f1 -d ',')
 if awk -v gv=${gdal_version::1} 'BEGIN {exit !(gv < 3)}' ; then
 	echo "GDAL version has to be at least 3.8" && exit 2
