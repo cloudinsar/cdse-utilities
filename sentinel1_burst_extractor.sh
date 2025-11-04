@@ -226,7 +226,7 @@ xmlstarlet ed \
 -u "product/imageAnnotation/imageInformation/productFirstLineUtcTime" -v $burst_azimuth_start \
 -u "product/adsHeader/startTime" -v $burst_azimuth_start \
 -u "product/imageAnnotation/imageInformation/productLastLineUtcTime" -v $burst_azimuth_end \
--u "product/adsHeader/stopTime" -v $burst_azimuth_end
+-u "product/adsHeader/stopTime" -v $burst_azimuth_end \
 "$annotation_xml_file" >${out_path}/annotation/${new_pattern}.xml
 s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
