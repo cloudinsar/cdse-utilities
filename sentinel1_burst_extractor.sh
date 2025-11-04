@@ -16,7 +16,7 @@
 #sudo apt update
 #sudo apt install -y xmlstarlet bc jq
 version="1.3"
-set -euo pipefail
+set -euxo pipefail
 usage()
 {
 cat << EOF
@@ -161,18 +161,20 @@ annotation_xml=$(s5cmd --log debug --log debug -r 5 ls --show-fullpath "s3:/${in
 if [ $(printf "$annotation_xml" | grep -c 'EC2MetadataError') -eq 1 ]; then
 	echo "ERROR:Failed to connect with ${S3_ENDPOINT_URL}" && exit 7
 fi
-annotation_data=$(s5cmd --log debug -r 5 cat $annotation_xml)
-manifest_data=$(s5cmd --log debug -r 5 cat s3:/${in_path}/manifest.safe)
-datatake_id=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId | awk '{printf("%06d",$1)}')
-number_of_lines=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst)
-number_of_samples=$(printf "$annotation_data" | xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst)
+annotation_xml_file=$(mktemp)
+s5cmd --log debug -r 5 cat $annotation_xml > "$annotation_xml_file"
+manifest_data_file=$(mktemp)
+s5cmd --log debug -r 5 cat s3:/${in_path}/manifest.safe > "$manifest_data_file"
+datatake_id=$(xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId "$annotation_xml_file" | awk '{printf("%06d",$1)}')
+number_of_lines=$(xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst "$annotation_xml_file")
+number_of_samples=$(xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst "$annotation_xml_file")
 set +eo pipefail
-burst_number=$(printf "$annotation_data" | xmlstarlet sel -t -m "//burst/burstId" -v . -n | grep -B 1000 ${relative_burst_id} | wc -l)
+burst_number=$(xmlstarlet sel -t -m "//burst/burstId" -v . -n "$annotation_xml_file" | grep -B 1000 ${relative_burst_id} | wc -l)
 set -euo pipefail
 if [ $burst_number -eq 0 ]; then
-	T0_b1=$(printf "$annotation_data" | xmlstarlet sel -t -m "/product/swathTiming/burstList/burst" -n -v sensingTime | grep . | xargs -i date -d {} "+%s.%N") 
-	Tanx=$(printf "$manifest_data" | xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:orbitReference/safe:extension/s1:orbitProperties' -v 's1:ascendingNodeTime' | xargs -i date -d {} "+%s.%N")
-	Or=$(printf "$manifest_data" | xmlstarlet sel -t -m "xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:orbitReference/safe:relativeOrbitNumber[@type='start']" -v '.')
+	T0_b1=$(xmlstarlet sel -t -m "/product/swathTiming/burstList/burst" -n -v sensingTime "$annotation_xml_file" | grep . | xargs -i date -d {} "+%s.%N")
+	Tanx=$(xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:orbitReference/safe:extension/s1:orbitProperties' -v 's1:ascendingNodeTime' "$manifest_data_file" | xargs -i date -d {} "+%s.%N")
+	Or=$(xmlstarlet sel -t -m "xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:orbitReference/safe:relativeOrbitNumber[@type='start']" -v '.' "$manifest_data_file")
 	#constants
 	Od=$(echo "scale=8;12*24*3600/175" | bc)
 	if [ "${subswath_id:0:2}" == 'iw' ]; then
@@ -189,17 +191,17 @@ if [ $burst_number -eq 0 ]; then
 	fi
 fi
 
-burst_byteoffset=$(printf "$annotation_data" | xmlstarlet sel -t -m "/product/swathTiming/burstList/burst" -n -v byteOffset | grep . | head -${burst_number} | tail -1)
-burst_sensing_start=$(printf "$annotation_data" | xmlstarlet sel -t -m "/product/swathTiming/burstList/burst[byteOffset=$burst_byteoffset]" -v sensingTime | tr -d '\-\:' | cut -f 1 -d '.')
+burst_byteoffset=$(xmlstarlet sel -t -m "/product/swathTiming/burstList/burst" -n -v byteOffset "$annotation_xml_file" | grep . | head -${burst_number} | tail -1)
+burst_sensing_start=$(xmlstarlet sel -t -m "/product/swathTiming/burstList/burst[byteOffset=$burst_byteoffset]" -v sensingTime "$annotation_xml_file" | tr -d '\-\:' | cut -f 1 -d '.')
 burst_sensing_start_date=$(echo ${burst_sensing_start:0:19} | tr -d '\-\.\:')
-burst_azimuth_start=$(printf "$annotation_data" | xmlstarlet sel -t -m "product/swathTiming/burstList/burst[byteOffset=$burst_byteoffset]" -v azimuthTime)
-azimuthTimeInterval=$(printf "$annotation_data" | xmlstarlet sel -t -m "product/imageAnnotation/imageInformation/azimuthTimeInterval" -v '.')
+burst_azimuth_start=$(xmlstarlet sel -t -m "product/swathTiming/burstList/burst[byteOffset=$burst_byteoffset]" -v azimuthTime "$annotation_xml_file")
+azimuthTimeInterval=$(xmlstarlet sel -t -m "product/imageAnnotation/imageInformation/azimuthTimeInterval" -v '.' "$annotation_xml_file")
 TZ='UTC'
 burst_azimuth_end=$(date --date '@'"$(echo $(date --date "$burst_azimuth_start" '+%s.%N')+$(($number_of_lines-1))*$(printf '%.20f' $azimuthTimeInterval) | bc)" +'%Y-%m-%dT%H:%M:%S.%N' | sed 's/...$//')
 relative_burst_id=$(printf '%06d' ${relative_burst_id})
 starting_line=$(echo "(${burst_number}-1)*${number_of_lines}" | bc)
 ending_line=$((${starting_line}+${number_of_lines}))
-platform_number=$(printf "$manifest_data" | xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:platform/safe:number' -v '.')
+platform_number=$(xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:platform/safe:number' -v '.' "$manifest_data_file")
 [ -z $out_path ] && out_path="./S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo ${subswath_id}| tr a-z A-Z)_$(echo ${polarization}| tr a-z A-Z)_${datatake_id}.SAFE || out_path=${out_path}"/S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo ${subswath_id}| tr a-z A-Z)_$(echo ${polarization}| tr a-z A-Z)_${datatake_id}.SAFE
 if [ -d "$out_path" ]; then
   echo "Output path $out_path already exists. Returning early."
@@ -210,8 +212,8 @@ fi
 new_pattern=${annotation_xml: -68:15}${relative_burst_id}-${burst_sensing_start}-${datatake_id}
 new_pattern_short=$(echo $new_pattern | tr -d '-')
 mkdir -p ${out_path}/measurement/ ${out_path}/annotation/calibration/
-new_gcps=$(printf "$annotation_data" | xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint' -v "concat('gcp=',pixel,',',line - ${starting_line},',',longitude,',',latitude,',',height,'|')"| tr '|' '&')
-annotation_data=$(printf "$annotation_data" | xmlstarlet ed \
+new_gcps=$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint' -v "concat('gcp=',pixel,',',line - ${starting_line},',',longitude,',',latitude,',',height,'|')" "$annotation_xml_file" | tr '|' '&')
+xmlstarlet ed \
 -d "product/swathTiming/burstList/burst[byteOffset!=$burst_byteoffset]" \
 -u "product/geolocationGrid/geolocationGridPointList/geolocationGridPoint/line" -x ". - ${starting_line}" \
 -u 'product/swathTiming/burstList/@count' -v 1 -u 'product/imageAnnotation/imageInformation/@numberOfLines' -v ${number_of_lines} \
@@ -219,8 +221,8 @@ annotation_data=$(printf "$annotation_data" | xmlstarlet ed \
 -u "product/imageAnnotation/imageInformation/productFirstLineUtcTime" -v $burst_azimuth_start \
 -u "product/adsHeader/startTime" -v $burst_azimuth_start \
 -u "product/imageAnnotation/imageInformation/productLastLineUtcTime" -v $burst_azimuth_end \
--u "product/adsHeader/stopTime" -v $burst_azimuth_end)
-printf "$annotation_data">${out_path}/annotation/${new_pattern}.xml
+-u "product/adsHeader/stopTime" -v $burst_azimuth_end
+"$annotation_xml_file" >${out_path}/annotation/${new_pattern}.xml
 s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
 -u 'calibration/adsHeader/startTime' -v $burst_azimuth_start \
@@ -235,10 +237,10 @@ if [ "$(s5cmd --log debug -r 5 ls s3:/${in_path}/annotation/ | grep -c rfi)" -eq
 	s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') | xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
 fi
 
-footprint=$(printf "$annotation_data" | xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
-footprint=${footprint}','$(printf "$annotation_data" | xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[not(line=0)]' -v "concat(number(longitude),' ',number(latitude),',')" | awk -F',' 'BEGIN{OFS=","}{print($(NF-1),$1)}')','"${footprint%,*}"
+footprint=$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" "${out_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
+footprint=${footprint}','$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[not(line=0)]' -v "concat(number(longitude),' ',number(latitude),',')" "${out_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($(NF-1),$1)}')','"${footprint%,*}"
 
-printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | sed "s/$(echo ${annotation_xml: -68:64} | tr -d '-')/$(echo ${new_pattern} | tr -d '-')/g" | xmlstarlet ed \
+sed "s/${annotation_xml: -68:64}/${new_pattern}/g" "$manifest_data_file" | sed "s/$(echo ${annotation_xml: -68:64} | tr -d '-')/$(echo ${new_pattern} | tr -d '-')/g" | xmlstarlet ed \
 -u 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:acquisitionPeriod/safe:startTime' -v ${burst_azimuth_start} \
 -u 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:acquisitionPeriod/safe:stopTime' -v $burst_azimuth_end \
 -u 'xfdu:XFDU/dataObjectSection/dataObject/byteStream/checksum' -v '' \
@@ -253,8 +255,8 @@ printf "$manifest_data" | sed "s/${annotation_xml: -68:64}/${new_pattern}/g" | s
 -d 'xfdu:XFDU/informationPackageMap/xfdu:contentUnit/xfdu:contentUnit/dataObjectPointer[not(contains(@dataObjectID,"'$new_pattern_short'"))]/..' \
 -d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > ${out_path}/manifest.safe
 
-set -x
 echo "gdal_translate"
 gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo ${annotation_xml:4:-3} | sed 's/annotation\//measurement\//g')tiff?${new_gcps}srcwin=0,${starting_line},${number_of_samples},${number_of_lines} ${out_path}/measurement/${new_pattern}.tiff
-set +x
+# Clean up temporary files
+rm -f "$annotation_xml_file" "$manifest_data_file"
 echo "out_path: $out_path/manifest.safe"
