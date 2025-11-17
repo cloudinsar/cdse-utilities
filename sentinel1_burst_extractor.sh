@@ -167,9 +167,9 @@ if [ $(printf "$annotation_xml" | grep -c 'EC2MetadataError') -eq 1 ]; then
 	echo "ERROR:Failed to connect with ${S3_ENDPOINT_URL}" && exit 7
 fi
 annotation_xml_file=$(mktemp)
-s5cmd --log debug -r 5 cat $annotation_xml > "$annotation_xml_file"
+s5cmd --log debug -r 5 cp $annotation_xml "$annotation_xml_file"
 manifest_data_file=$(mktemp)
-s5cmd --log debug -r 5 cat s3:/${in_path}/manifest.safe > "$manifest_data_file"
+s5cmd --log debug -r 5 cp s3:/${in_path}/manifest.safe "$manifest_data_file"
 datatake_id=$(xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId "$annotation_xml_file" | awk '{printf("%06d",$1)}')
 number_of_lines=$(xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst "$annotation_xml_file")
 number_of_samples=$(xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst "$annotation_xml_file")
