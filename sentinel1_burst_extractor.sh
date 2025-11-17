@@ -163,9 +163,12 @@ case $subswath_id in
 		echo "subswath '$subswath_id' not equals one of iw1,iw2,iw3,ew1,ew2,ew3,ew4,ew5" && exit 3 ;;
 esac
 annotation_xml=$(s5cmd --log debug --log debug -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
-if [ $(printf "$annotation_xml" | grep -c 'EC2MetadataError') -eq 1 ]; then
+annotation_xml_check=$(mktemp)
+printf "$annotation_xml" > "$annotation_xml_check"
+if [ $(grep -c 'EC2MetadataError' "$annotation_xml_check") -eq 1 ]; then
 	echo "ERROR:Failed to connect with ${S3_ENDPOINT_URL}" && exit 7
 fi
+rm -f "$annotation_xml_check"
 annotation_xml_file=$(mktemp)
 s5cmd --log debug -r 5 cp $annotation_xml "$annotation_xml_file"
 manifest_data_file=$(mktemp)
@@ -189,8 +192,14 @@ if [ $burst_number -eq 0 ]; then
 		Tbeam=3.038376
 		T_pre=2.299970
 	fi
-	BurstIds=$(printf "$T0_b1" | xargs -i echo "1 + ((({} + $T0_delta - $Tanx)+($Or-1)*$Od) - $T_pre)/$Tbeam;" | bc)
-	burst_number=$(printf "$BurstIds" | grep -B 1000 ${relative_burst_id} | wc -l)
+	T0_b1_file=$(mktemp)
+	printf "%s\n" "$T0_b1" > "$T0_b1_file"
+	BurstIds=$(cat "$T0_b1_file" | xargs -i echo "1 + ((({} + $T0_delta - $Tanx)+($Or-1)*$Od) - $T_pre)/$Tbeam;" | bc)
+	rm -f "$T0_b1_file"
+	BurstIds_file=$(mktemp)
+	printf "%s\n" "$BurstIds" > "$BurstIds_file"
+	burst_number=$(grep -B 1000 ${relative_burst_id} "$BurstIds_file" | wc -l)
+	rm -f "$BurstIds_file"
 	if [ $burst_number -eq 0 ]; then
 		echo "Relative burst id '$relative_burst_id' not found in the ${product_name}" && exit 5 
 	fi
@@ -228,18 +237,27 @@ xmlstarlet ed \
 -u "product/imageAnnotation/imageInformation/productLastLineUtcTime" -v $burst_azimuth_end \
 -u "product/adsHeader/stopTime" -v $burst_azimuth_end \
 "$annotation_xml_file" >${out_path}/annotation/${new_pattern}.xml
-s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') | xmlstarlet ed \
+calibration_temp=$(mktemp)
+s5cmd --log debug -r 5 cp $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/calibration-/g') "$calibration_temp"
+xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
 -u 'calibration/adsHeader/startTime' -v $burst_azimuth_start \
--u 'calibration/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/calibration/calibration-${new_pattern}.xml
+-u 'calibration/adsHeader/stopTime' -v $burst_azimuth_end "$calibration_temp" >${out_path}/annotation/calibration/calibration-${new_pattern}.xml
+rm -f "$calibration_temp"
 
-s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/noise-/g') | xmlstarlet ed \
+noise_temp=$(mktemp)
+s5cmd --log debug -r 5 cp $(echo $annotation_xml | sed 's/annotation\//annotation\/calibration\/noise-/g') "$noise_temp"
+xmlstarlet ed \
 -u 'noise/noiseRangeVectorList/noiseRangeVector/line' -x ".-$starting_line" \
 -u 'noise/adsHeader/startTime' -v $burst_azimuth_start \
--u 'noise/adsHeader/stopTime' -v $burst_azimuth_end>${out_path}/annotation/calibration/noise-${new_pattern}.xml
+-u 'noise/adsHeader/stopTime' -v $burst_azimuth_end "$noise_temp" >${out_path}/annotation/calibration/noise-${new_pattern}.xml
+rm -f "$noise_temp"
 if [ "$(s5cmd --log debug -r 5 ls s3:/${in_path}/annotation/ | grep -c rfi)" -eq "1" ]; then
 	mkdir -p ${out_path}/annotation/rfi/
-	s5cmd --log debug -r 5 cat $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') | xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
+	rfi_temp=$(mktemp)
+	s5cmd --log debug -r 5 cp $(echo $annotation_xml | sed 's/annotation\//annotation\/rfi\/rfi-/g') "$rfi_temp"
+	xmlstarlet ed -u 'rfi/adsHeader/startTime' -v $burst_azimuth_start -u 'rfi/adsHeader/stopTime' -v $burst_azimuth_end "$rfi_temp" >${out_path}/annotation/rfi/rfi-${new_pattern}.xml
+	rm -f "$rfi_temp"
 fi
 
 footprint=$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" "${out_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
