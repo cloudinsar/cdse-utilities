@@ -120,13 +120,13 @@ fi
 if awk -v gv="${gdal_version:2:4}" 'BEGIN {exit !(gv < 8)}' ; then
 	echo "GDAL version has to be at least 3.8" && exit 2
 fi
-if [ -z $(which jq) ]; then
+if [ -z "$(which jq)" ]; then
 	echo "jq has not been found. Type 'sudo apt update && sudo apt install -y jq'" && exit 2
 fi
-if [ -z $(which bc) ]; then
+if [ -z "$(which bc)" ]; then
 	echo "bc has not been found. Type 'sudo apt update && sudo apt install -y bc'" && exit 2
 fi
-if [ -z $(which xmlstarlet) ]; then
+if [ -z "$(which xmlstarlet)" ]; then
 	echo "xmlstarlet has not been found. Type 'sudo apt update && sudo apt install -y xmlstarlet'" && exit 2
 fi
 if [ -z "${product_name-}" ]; then
@@ -139,7 +139,7 @@ fi
 if [ -z "${relative_burst_id-}" ]; then
 	echo "Sentinel-1 relative burst ID not defined" && exit 3
 fi
-if [ ! "$polarization" = "vv" -a ! "$polarization" = "vh" -a ! "$polarization" = "hh" -a ! "$polarization" = "hv" ]; then 
+if [ ! "$polarization" = "vv" ] && [ ! "$polarization" = "vh" ] && [ ! "$polarization" = "hh" ] && [ ! "$polarization" = "hv" ]; then
 	echo "polarization '$polarization' not equals one of vv,vh,hh,hv" && exit 3
 fi
 case $subswath_id in
@@ -214,7 +214,6 @@ TZ='UTC'
 burst_azimuth_end=$(date --date '@'"$(echo $(date --date "$burst_azimuth_start" '+%s.%N')+$(($number_of_lines-1))*$(printf '%.20f' "$azimuthTimeInterval") | bc)" +'%Y-%m-%dT%H:%M:%S.%N' | sed 's/...$//')
 relative_burst_id=$(printf '%06d' "${relative_burst_id}")
 starting_line=$(echo "(${burst_number}-1)*${number_of_lines}" | bc)
-ending_line=$((${starting_line}+${number_of_lines}))
 platform_number=$(xmlstarlet sel -t -m 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:platform/safe:number' -v '.' "$manifest_data_file")
 [ -z "$out_path" ] && out_path="./S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo "${subswath_id}"| tr a-z A-Z)_$(echo "${polarization}"| tr a-z A-Z)_${datatake_id}.SAFE || out_path=${out_path}"/S1${platform_number}_SLC_"${burst_sensing_start_date}_${relative_burst_id}_$(echo "${subswath_id}"| tr a-z A-Z)_$(echo "${polarization}"| tr a-z A-Z)_${datatake_id}.SAFE
 if [ -d "$out_path" ]; then
