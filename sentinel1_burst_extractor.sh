@@ -162,7 +162,7 @@ case $subswath_id in
 	*)
 		echo "subswath '$subswath_id' not equals one of iw1,iw2,iw3,ew1,ew2,ew3,ew4,ew5" && exit 3 ;;
 esac
-annotation_xml=$(s5cmd --log debug --log debug -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
+annotation_xml=$(s5cmd -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
 annotation_xml_check=$(mktemp)
 printf "$annotation_xml" > "$annotation_xml_check"
 if [ $(grep -c 'EC2MetadataError' "$annotation_xml_check") -eq 1 ]; then
@@ -251,7 +251,7 @@ xmlstarlet ed \
 -u 'noise/adsHeader/startTime' -v "$burst_azimuth_start" \
 -u 'noise/adsHeader/stopTime' -v "$burst_azimuth_end" "$noise_temp" >"${out_path}"/annotation/calibration/noise-"${new_pattern}".xml
 rm -f "$noise_temp"
-if [ "$(s5cmd --log debug -r 5 ls s3:/"${in_path}"/annotation/ | grep -c rfi)" -eq "1" ]; then
+if [ "$(s5cmd -r 5 ls s3:/"${in_path}"/annotation/ | grep -c rfi)" -eq "1" ]; then
 	mkdir -p "${out_path}"/annotation/rfi/
 	rfi_temp=$(mktemp)
 	s5cmd --log debug -r 5 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/rfi\/rfi-/g') "$rfi_temp"
