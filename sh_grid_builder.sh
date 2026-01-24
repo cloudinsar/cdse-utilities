@@ -2,12 +2,9 @@
 # Example of usage
 #./sh_grid_builder.sh -i data/aoi.geojson -r "10,10" -p 3035 -t bounding-box -o output_bbox.gpkg
 #./sh_grid_builder.sh -i data/aoi.geojson -r "(300,359)" -p 32632 -t pixelated -o output_pixelated.gpkg
-#developed by CloudFerro
-#contact jmusial(at)cloudferro.com
+#developed by Maxim Lamare (2026)
 ###############################
-#release notes:
-#Version 1.0 [20260124] - initial release
-version="1.0"
+version="0.2.2"
 usage()
 {
 cat << EOF
