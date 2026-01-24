@@ -26,13 +26,23 @@ RUN curl -L -O 'https://s3.waw3-2.cloudferro.com/swift/v1/jacksum/jacksum_1.7.0-
     dpkg -i "s5cmd_2.2.2_linux_${ARCH}.deb" && \
     rm "s5cmd_2.2.2_linux_${ARCH}.deb"
 
+# Use UV as a package manager for Python dependencies
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install SH-Batch-Grid-Builder
+RUN uv pip install --no-cache sh-batch-grid-builder
+
 # Copy and set permissions for scripts
 COPY COG2GRD.sh /bin/COG2GRD.sh
 COPY GRD2COG.sh /bin/GRD2COG.sh
 COPY sentinel1_burst_extractor.sh /bin/sentinel1_burst_extractor.sh
 COPY sentinel1_burst_extractor_spatiotemporal.sh /bin/sentinel1_burst_extractor_spatiotemporal.sh
+COPY sh_grid_builder.sh /bin/sh_grid_builder.sh
 
-RUN chmod +x /bin/COG2GRD.sh /bin/GRD2COG.sh /bin/sentinel1_burst_extractor.sh /bin/sentinel1_burst_extractor_spatiotemporal.sh
+RUN chmod +x /bin/COG2GRD.sh /bin/GRD2COG.sh /bin/sentinel1_burst_extractor.sh /bin/sentinel1_burst_extractor_spatiotemporal.sh /bin/sh_grid_builder.sh
 
 # Set environment variables
 ENV AWS_S3_ENDPOINT=eodata.dataspace.copernicus.eu \
