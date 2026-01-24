@@ -19,8 +19,12 @@ RUN apt-get update && \
 # Download and install jacksum and s5cmd
 RUN curl -L -O 'https://s3.waw3-2.cloudferro.com/swift/v1/jacksum/jacksum_1.7.0-4.1_all.deb' && \
     dpkg -i jacksum_1.7.0-4.1_all.deb && rm jacksum_1.7.0-4.1_all.deb && \
-    curl -L -O 'https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_linux_amd64.deb' && \
-    dpkg -i s5cmd_2.2.2_linux_amd64.deb && rm s5cmd_2.2.2_linux_amd64.deb
+    # Detect architecture (amd64 or arm64)
+    ARCH=$(dpkg --print-architecture) && \
+    # Use double quotes below so ${ARCH} is expanded
+    curl -L -O "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_linux_${ARCH}.deb" && \
+    dpkg -i "s5cmd_2.2.2_linux_${ARCH}.deb" && \
+    rm "s5cmd_2.2.2_linux_${ARCH}.deb"
 
 # Copy and set permissions for scripts
 COPY COG2GRD.sh /bin/COG2GRD.sh
