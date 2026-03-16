@@ -162,7 +162,7 @@ case $subswath_id in
 	*)
 		echo "subswath '$subswath_id' not equals one of iw1,iw2,iw3,ew1,ew2,ew3,ew4,ew5" && exit 3 ;;
 esac
-annotation_xml=$(s5cmd -r 5 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
+annotation_xml=$(s5cmd -r 15 ls --show-fullpath "s3:/${in_path}/annotation/s1*${subswath_id}-slc-${polarization}*.xml" 2>&1)
 annotation_xml_check=$(mktemp)
 printf "$annotation_xml" > "$annotation_xml_check"
 if [ $(grep -c 'EC2MetadataError' "$annotation_xml_check") -eq 1 ]; then
@@ -170,9 +170,9 @@ if [ $(grep -c 'EC2MetadataError' "$annotation_xml_check") -eq 1 ]; then
 fi
 rm -f "$annotation_xml_check"
 annotation_xml_file=$(mktemp)
-s5cmd --log debug -r 5 cp "$annotation_xml" "$annotation_xml_file"
+s5cmd --log debug -r 15 cp "$annotation_xml" "$annotation_xml_file"
 manifest_data_file=$(mktemp)
-s5cmd --log debug -r 5 cp s3:/"${in_path}"/manifest.safe "$manifest_data_file"
+s5cmd --log debug -r 15 cp s3:/"${in_path}"/manifest.safe "$manifest_data_file"
 datatake_id=$(xmlstarlet sel -t -m '/product/adsHeader' -v missionDataTakeId "$annotation_xml_file" | awk '{printf("%06d",$1)}')
 number_of_lines=$(xmlstarlet sel -t -m '/product/swathTiming' -v linesPerBurst "$annotation_xml_file")
 number_of_samples=$(xmlstarlet sel -t -m '/product/swathTiming' -v samplesPerBurst "$annotation_xml_file")
@@ -237,7 +237,7 @@ xmlstarlet ed \
 -u "product/adsHeader/stopTime" -v "$burst_azimuth_end" \
 "$annotation_xml_file" >"${out_path}"/annotation/"${new_pattern}".xml
 calibration_temp=$(mktemp)
-s5cmd --log debug -r 5 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/calibration\/calibration-/g') "$calibration_temp"
+s5cmd --log debug -r 15 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/calibration\/calibration-/g') "$calibration_temp"
 xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
 -u 'calibration/adsHeader/startTime' -v "$burst_azimuth_start" \
@@ -245,16 +245,16 @@ xmlstarlet ed \
 rm -f "$calibration_temp"
 
 noise_temp=$(mktemp)
-s5cmd --log debug -r 5 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/calibration\/noise-/g') "$noise_temp"
+s5cmd --log debug -r 15 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/calibration\/noise-/g') "$noise_temp"
 xmlstarlet ed \
 -u 'noise/noiseRangeVectorList/noiseRangeVector/line' -x ".-$starting_line" \
 -u 'noise/adsHeader/startTime' -v "$burst_azimuth_start" \
 -u 'noise/adsHeader/stopTime' -v "$burst_azimuth_end" "$noise_temp" >"${out_path}"/annotation/calibration/noise-"${new_pattern}".xml
 rm -f "$noise_temp"
-if [ "$(s5cmd -r 5 ls s3:/"${in_path}"/annotation/ | grep -c rfi)" -eq "1" ]; then
+if [ "$(s5cmd -r 15 ls s3:/"${in_path}"/annotation/ | grep -c rfi)" -eq "1" ]; then
 	mkdir -p "${out_path}"/annotation/rfi/
 	rfi_temp=$(mktemp)
-	s5cmd --log debug -r 5 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/rfi\/rfi-/g') "$rfi_temp"
+	s5cmd --log debug -r 15 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/rfi\/rfi-/g') "$rfi_temp"
 	xmlstarlet ed -u 'rfi/adsHeader/startTime' -v "$burst_azimuth_start" -u 'rfi/adsHeader/stopTime' -v "$burst_azimuth_end" "$rfi_temp" >"${out_path}"/annotation/rfi/rfi-"${new_pattern}".xml
 	rm -f "$rfi_temp"
 fi
