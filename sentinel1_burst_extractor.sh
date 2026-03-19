@@ -222,9 +222,14 @@ if [ -d "$out_path" ]; then
   exit 0
 fi
 
+# Write to tmp first and use atomic move in the end to avoid leaving partial output in case of failure:
+tmp_path=$(mktemp -d)
+# Remove tmp_path when the script exits:
+trap 'rm -rf "$tmp_path"' EXIT
+
 new_pattern=${annotation_xml: -68:15}${relative_burst_id}-${burst_sensing_start}-${datatake_id}
 new_pattern_short=$(echo "$new_pattern" | tr -d '-')
-mkdir -p "${out_path}"/measurement/ "${out_path}"/annotation/calibration/
+mkdir -p "${tmp_path}"/measurement/ "${tmp_path}"/annotation/calibration/
 new_gcps=$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint' -v "concat('gcp=',pixel,',',line - ${starting_line},',',longitude,',',latitude,',',height,'|')" "$annotation_xml_file" | tr '|' '&')
 xmlstarlet ed \
 -d "product/swathTiming/burstList/burst[byteOffset!=$burst_byteoffset]" \
@@ -235,13 +240,13 @@ xmlstarlet ed \
 -u "product/adsHeader/startTime" -v "$burst_azimuth_start" \
 -u "product/imageAnnotation/imageInformation/productLastLineUtcTime" -v "$burst_azimuth_end" \
 -u "product/adsHeader/stopTime" -v "$burst_azimuth_end" \
-"$annotation_xml_file" >"${out_path}"/annotation/"${new_pattern}".xml
+"$annotation_xml_file" >"${tmp_path}"/annotation/"${new_pattern}".xml
 calibration_temp=$(mktemp)
 s5cmd --log debug -r 15 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/calibration\/calibration-/g') "$calibration_temp"
 xmlstarlet ed \
 -u 'calibration/calibrationVectorList/calibrationVector/line' -x ".-$starting_line" \
 -u 'calibration/adsHeader/startTime' -v "$burst_azimuth_start" \
--u 'calibration/adsHeader/stopTime' -v "$burst_azimuth_end" "$calibration_temp" >"${out_path}"/annotation/calibration/calibration-"${new_pattern}".xml
+-u 'calibration/adsHeader/stopTime' -v "$burst_azimuth_end" "$calibration_temp" >"${tmp_path}"/annotation/calibration/calibration-"${new_pattern}".xml
 rm -f "$calibration_temp"
 
 noise_temp=$(mktemp)
@@ -249,18 +254,18 @@ s5cmd --log debug -r 15 cp $(echo "$annotation_xml" | sed 's/annotation\//annota
 xmlstarlet ed \
 -u 'noise/noiseRangeVectorList/noiseRangeVector/line' -x ".-$starting_line" \
 -u 'noise/adsHeader/startTime' -v "$burst_azimuth_start" \
--u 'noise/adsHeader/stopTime' -v "$burst_azimuth_end" "$noise_temp" >"${out_path}"/annotation/calibration/noise-"${new_pattern}".xml
+-u 'noise/adsHeader/stopTime' -v "$burst_azimuth_end" "$noise_temp" >"${tmp_path}"/annotation/calibration/noise-"${new_pattern}".xml
 rm -f "$noise_temp"
 if [ "$(s5cmd -r 15 ls s3:/"${in_path}"/annotation/ | grep -c rfi)" -eq "1" ]; then
-	mkdir -p "${out_path}"/annotation/rfi/
+	mkdir -p "${tmp_path}"/annotation/rfi/
 	rfi_temp=$(mktemp)
 	s5cmd --log debug -r 15 cp $(echo "$annotation_xml" | sed 's/annotation\//annotation\/rfi\/rfi-/g') "$rfi_temp"
-	xmlstarlet ed -u 'rfi/adsHeader/startTime' -v "$burst_azimuth_start" -u 'rfi/adsHeader/stopTime' -v "$burst_azimuth_end" "$rfi_temp" >"${out_path}"/annotation/rfi/rfi-"${new_pattern}".xml
+	xmlstarlet ed -u 'rfi/adsHeader/startTime' -v "$burst_azimuth_start" -u 'rfi/adsHeader/stopTime' -v "$burst_azimuth_end" "$rfi_temp" >"${tmp_path}"/annotation/rfi/rfi-"${new_pattern}".xml
 	rm -f "$rfi_temp"
 fi
 
-footprint=$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" "${out_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
-footprint=${footprint}','$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[not(line=0)]' -v "concat(number(longitude),' ',number(latitude),',')" "${out_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($(NF-1),$1)}')','"${footprint%,*}"
+footprint=$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[line=0]' -v "concat(number(longitude),' ',number(latitude),',')" "${tmp_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($1,$(NF-1))}')
+footprint=${footprint}','$(xmlstarlet sel -t -m 'product/geolocationGrid/geolocationGridPointList/geolocationGridPoint[not(line=0)]' -v "concat(number(longitude),' ',number(latitude),',')" "${tmp_path}/annotation/${new_pattern}.xml" | awk -F',' 'BEGIN{OFS=","}{print($(NF-1),$1)}')','"${footprint%,*}"
 
 sed "s/${annotation_xml: -68:64}/${new_pattern}/g" "$manifest_data_file" | sed "s/$(echo "${annotation_xml: -68:64}" | tr -d '-')/$(echo "${new_pattern}" | tr -d '-')/g" | xmlstarlet ed \
 -u 'xfdu:XFDU/metadataSection/metadataObject/metadataWrap/xmlData/safe:acquisitionPeriod/safe:startTime' -v "${burst_azimuth_start}" \
@@ -275,10 +280,13 @@ sed "s/${annotation_xml: -68:64}/${new_pattern}/g" "$manifest_data_file" | sed "
 -d 'xfdu:XFDU/dataObjectSection/dataObject[not(contains(@ID,"'"$new_pattern_short"'"))]' \
 -d 'xfdu:XFDU/metadataSection/metadataObject/dataObjectPointer[not(contains(@dataObjectID,"'"$new_pattern_short"'"))]/..' \
 -d 'xfdu:XFDU/informationPackageMap/xfdu:contentUnit/xfdu:contentUnit/dataObjectPointer[not(contains(@dataObjectID,"'"$new_pattern_short"'"))]/..' \
--d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > "${out_path}"/manifest.safe
+-d 'xfdu:XFDU/metadataSection/metadataObject[@classification="SYNTAX"]' > "${tmp_path}"/manifest.safe
 
 echo "gdal_translate"
-gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo "${annotation_xml:4:-3}" | sed 's/annotation\//measurement\//g')tiff?"${new_gcps}"srcwin=0,"${starting_line}","${number_of_samples}","${number_of_lines}" "${out_path}"/measurement/"${new_pattern}".tiff
+gdal_translate -of GTiff --config GDAL_HTTP_MAX_RETRY 5 --config NUM_THREADS -1 --config COMPRESS ZSTD vrt:///vsis3$(echo "${annotation_xml:4:-3}" | sed 's/annotation\//measurement\//g')tiff?"${new_gcps}"srcwin=0,"${starting_line}","${number_of_samples}","${number_of_lines}" "${tmp_path}"/measurement/"${new_pattern}".tiff
 # Clean up temporary files
 rm -f "$annotation_xml_file" "$manifest_data_file"
+trap - EXIT
+# mv will overwrite target:
+mv "$tmp_path" "$out_path"
 echo "out_path: $out_path/manifest.safe"
