@@ -19,16 +19,30 @@ RUN apt-get update && \
 # Download and install jacksum and s5cmd
 RUN curl -L -O 'https://s3.waw3-2.cloudferro.com/swift/v1/jacksum/jacksum_1.7.0-4.1_all.deb' && \
     dpkg -i jacksum_1.7.0-4.1_all.deb && rm jacksum_1.7.0-4.1_all.deb && \
-    curl -L -O 'https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_linux_amd64.deb' && \
-    dpkg -i s5cmd_2.2.2_linux_amd64.deb && rm s5cmd_2.2.2_linux_amd64.deb
+    # Detect architecture (amd64 or arm64)
+    ARCH=$(dpkg --print-architecture) && \
+    # Use double quotes below so ${ARCH} is expanded
+    curl -L -O "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_linux_${ARCH}.deb" && \
+    dpkg -i "s5cmd_2.2.2_linux_${ARCH}.deb" && \
+    rm "s5cmd_2.2.2_linux_${ARCH}.deb"
+
+# Use UV as a package manager for Python dependencies
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install SH-Batch-Grid-Builder
+RUN uv pip install --no-cache sh-batch-grid-builder
 
 # Copy and set permissions for scripts
 COPY COG2GRD.sh /bin/COG2GRD.sh
 COPY GRD2COG.sh /bin/GRD2COG.sh
 COPY sentinel1_burst_extractor.sh /bin/sentinel1_burst_extractor.sh
 COPY sentinel1_burst_extractor_spatiotemporal.sh /bin/sentinel1_burst_extractor_spatiotemporal.sh
+COPY sh_grid_builder.sh /bin/sh_grid_builder.sh
 
-RUN chmod +x /bin/COG2GRD.sh /bin/GRD2COG.sh /bin/sentinel1_burst_extractor.sh /bin/sentinel1_burst_extractor_spatiotemporal.sh
+RUN chmod +x /bin/COG2GRD.sh /bin/GRD2COG.sh /bin/sentinel1_burst_extractor.sh /bin/sentinel1_burst_extractor_spatiotemporal.sh /bin/sh_grid_builder.sh
 
 # Set environment variables
 ENV AWS_S3_ENDPOINT=eodata.dataspace.copernicus.eu \

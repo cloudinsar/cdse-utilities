@@ -43,3 +43,45 @@ docker run -it -v /home/ubuntu:/home/ubuntu cdse_utilities GRD2COG.sh -i /home/u
 ```
 docker run -it -v /home/ubuntu:/home/ubuntu cdse_utilities COG2COG.sh -i /home/ubuntu/docker_test/S1A_IW_GRDH_1SDV_20230206T165050_20230206T165115_047118_05A716_1A19_COG.SAFE.zip -o /home/ubuntu
 ```
+
+## Generate a custom grid aligned to the native projection grid for use in Sentinel Hub Batch V2 API
+
+This utility generates aligned geometries (bounding box or a pixelated AOI) following the requirements of [Sentinel Hub Batch V2 API](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/BatchV2.html) for an input AOI. It wraps the [sh-batch-grid-builder](https://pypi.org/project/sh-batch-grid-builder/) Python package.
+
+### Script Options                                                         
+
+```bash
+-i: path to input AOI file (GeoJSON, GPKG, or other formats supported by GeoPandas)
+
+-r: grid resolution as "(x,y)" or "x,y" in CRS coordinate units (e.g., "10,10" for 10 meters)
+
+-p: EPSG code for the output CRS (e.g., 3035 for ETRS89 / LAEA Europe, 4326 for WGS84)
+
+-t: output type: bounding-box or pixelated
+
+-o: path to output file (GPKG format required)
+
+-h: help
+
+-v: version
+```
+### Usage examples
+Generate aligned bounding box with same resolution for x and y:
+```
+docker run -it -v "$(pwd)":/home/ubuntu cdse_utilities sh_grid_builder.sh -i /home/ubuntu/aoi.geojson -r "10,10" -p 3035 -t bounding-box -o /home/ubuntu/output_bbox.gpkg
+```
+
+Generate aligned bounding box with different x and y resolutions:
+```
+docker run -it -v "$(pwd)":/home/ubuntu cdse_utilities sh_grid_builder.sh -i /home/ubuntu/aoi.geojson -r "(300,359)" -p 32632 -t bounding-box -o /home/ubuntu/output_bbox.gpkg
+```
+
+Generate pixelated geometry:
+```
+docker run -it -v "$(pwd)":/home/ubuntu cdse_utilities sh_grid_builder.sh -i /home/ubuntu/aoi.geojson -r "10,10" -p 3035 -t pixelated -o /home/ubuntu/output_pixelated.gpkg
+```
+
+Example with geographic CRS (degrees):
+```
+docker run -it -v "$(pwd)":/home/ubuntu cdse_utilities sh_grid_builder.sh -i /home/ubuntu/aoi.geojson -r "(0.001,0.001)" -p 4326 -t bounding-box -o /home/ubuntu/output_bbox.gpkg
+```
